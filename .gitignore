@@ -1,0 +1,4 @@
+.stfolder
+.idea
+venv
+*__pycache__

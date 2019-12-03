@@ -1,0 +1,33 @@
+virtualenv venv --python=python3.7
+pip install tensorflow==1.15
+
+
+# pytest
+## -U is 'upgrade' to latest. (not sure if needed, but it's the form listed on the website).
+pip install -U pytest
+
+# Installing the vim plugin, which requires nodejs:
+pip install jupyterlab
+## Install spellcheck plugin:
+jupyter labextension install @ijmbarr/jupyterlab_spellchecker
+## Install matplotlib
+pip install matplotlib
+
+
+# Requirements for deep_fill
+pip install git+https://github.com/JiahuiYu/neuralgym
+git clone https://github.com/JiahuiYu/generative_inpainting deep_fill
+# Download places pretrained model from Google Drive (https://drive.google.com/drive/folders/1y7Irxm3HSHGvp546hZdAZwuNmhLUVcjO):
+cd generative_inpainting
+mkdir model_logs
+cd model_logs
+pip install gdown
+gdown https://drive.google.com/uc?id=1dyPD2hx0JTmMuHYa32j-pu--MXqgLgMy
+gdown https://drive.google.com/uc?id=1ExY4hlx0DjVElqJlki57la3Qxu40uhgd
+gdown https://drive.google.com/uc?id=1z9dbEAzr5lmlCewixevFMTVBmNuSNAgK
+gdown https://drive.google.com/uc?id=1C7kPxqrpNpQF7B2UAKd_GvhUMk0prRdV
+
+# More requirements
+pip install PyYAML
+pip install opencv-python
+pip install Pillow # 2.2.2
