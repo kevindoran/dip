@@ -6,8 +6,8 @@ bleach==3.1.0
 cycler==0.10.0
 decorator==4.4.1
 defusedxml==0.6.0
-# Editable install with no version control (dip==0.0.0)
--e ./
+# Editable Git install with no remote (dip==0.0.0)
+-e /home/k/projects/deep_image_prior/src
 entrypoints==0.3
 gast==0.2.2
 google-pasta==0.1.8
@@ -40,18 +40,22 @@ notebook==6.0.2
 numpy==1.17.4
 opencv-python==4.1.2.30
 opt-einsum==3.1.0
+packaging==19.2
 pandocfilters==1.4.2
 parso==0.5.1
 pexpect==4.7.0
 pickleshare==0.7.5
 Pillow==6.2.1
+pluggy==0.13.1
 prometheus-client==0.7.1
 prompt-toolkit==3.0.2
 protobuf==3.11.0
 ptyprocess==0.6.0
+py==1.8.0
 Pygments==2.5.2
 pyparsing==2.4.5
 pyrsistent==0.15.6
+pytest==5.3.1
 python-dateutil==2.8.1
 PyYAML==5.2
 pyzmq==18.1.1

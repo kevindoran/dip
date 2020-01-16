@@ -31,3 +31,12 @@ gdown https://drive.google.com/uc?id=1C7kPxqrpNpQF7B2UAKd_GvhUMk0prRdV
 pip install PyYAML
 pip install opencv-python
 pip install Pillow # 2.2.2
+
+# Download places2 dataset standard
+mkdir data_private
+cat 'data_private' >> .stignore
+wget http://data.csail.mit.edu/places/places365/train_256_places365standard.tar
+wget http://data.csail.mit.edu/places/places365/val_256.tar
+wget http://data.csail.mit.edu/places/places365/test_256.tar
+
+pip install tensorflow-datasets
