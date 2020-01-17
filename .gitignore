@@ -3,3 +3,6 @@
 .idea
 venv
 *__pycache__
+*.swp
+*.pyc
+*egg-info
