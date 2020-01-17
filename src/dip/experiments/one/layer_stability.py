@@ -3,11 +3,15 @@ import numpy as np
 import tensorflow as tf
 import dip.deep_fill.inpaint_model as deep_fill_model
 import re
+import pprint
+from collections import defaultdict
 
 IMG_SHAPE = (256, 256, 3)
 BATCH_SIZE = 16
 NET_NAME = 'inpaint_net'
 DBG_FOLDER_PATH = 'out/experiments/1/dbg'
+
+pretty_printer = pprint.PrettyPrinter()
 
 def stage_1_layer_names():
     names = ['conv1', 'conv2_downsample', 'conv3', 'conv4_downsample',
@@ -25,16 +29,28 @@ def layer_name_from_var(variable):
         raise Exception('Error finding layer name from variable: '
                         f'{name}.')
     return m.group(1)
+
+
+def gradients_by_layer(grad_var_pairs):
+    d = defaultdict(list)
+    for g,v in grad_var_pairs:
+        d[layer_name_from_var(v)].append(g)
+    return d
+
+def gradient_by_layer(grad_var_pairs):
+    layer_to_grad = {}
+    for layer_name, grads in gradients_by_layer(grad_var_pairs).items():
+        layer_dist = tf.add_n([tf.nn.l2_loss(v) for v in grads])
+        # Normalize by no. of params.
+        layer_dist /= len(grads)
+        layer_to_grad[layer_name] = layer_dist
+    return layer_to_grad
     
-
-
-def gradient_dist_by_layer(gradients):
-    raise NotImplementedError()
-
 
 def l2_loss(out_img_batch, true_img):
     diff = out_img_batch - true_img
     loss = tf.reduce_sum(tf.pow(diff, 2))
+    #loss = tf.reduce_mean(tf.pow(diff/4.0, 2))
     return loss
 
 
@@ -56,14 +72,15 @@ def sgd_optimizer():
 
 
 def adam_optimizer():
-    learning_rate = 300.0
-    optimizer = tf.train.GradientDescentOptimizer(
+    learning_rate = 0.003
+    optimizer = tf.train.AdamOptimizer(
             learning_rate=learning_rate, epsilon=0.01)
     return optimizer, learning_rate
 
 
 def create_optimizer():
-    return sgd_optimizer()
+    #return sgd_optimizer()
+    return adam_optimizer()
 
 
 def run(target_img_path, true_img_path):
@@ -97,6 +114,7 @@ def run(target_img_path, true_img_path):
                                                   mask=mask,
                                                   training=True)
     out_img_batch = stage_1
+    #loss = l2_loss(out_img_batch, target_img_batch) + weight_loss()
     loss = l2_loss(out_img_batch, target_img_batch) + weight_loss()
     optimizer, learning_rate = create_optimizer()
     grads = optimizer.compute_gradients(loss)
@@ -106,8 +124,10 @@ def run(target_img_path, true_img_path):
     # Should we clip or not? If clipping, then we have some limits on our loss,
     # (-1 - 1)^2 No, don't clip the loss, but you can clip the image before
     # saving.
-    img_to_print = out_img_batch[0] #tf.clip_by_value(out_img_batch,
-    clip_value_min=-1.0, clip_value_max=1.0)
+    #tf.clip_by_value(out_img_batch, clip_value_min=-1.0, clip_value_max=1.0)
+    img_to_print = out_img_batch[0] 
+    dbg_target = true_img_batch[0]
+    per_layer_data = gradient_by_layer(grads)
 
     # Run graph.
     with tf.Session() as sess:
@@ -124,7 +144,9 @@ def run(target_img_path, true_img_path):
             run_eval = step < 20 or (not step % steps_per_eval)
             if run_eval:
                 #import pdb;pdb.set_trace()
-                img_to_print_val = sess.run([img_to_print])[0]
+                img_to_print_val, dbg_target_val, layer_data_val = \
+                    sess.run([img_to_print, dbg_target, per_layer_data])
+                pretty_printer.pprint(layer_data_val)
                 out_path = f'{DBG_FOLDER_PATH}/{step}.png'
                 dip.image_io.print_img((img_to_print_val + 1.0)*127.5, 
                         out_path)
