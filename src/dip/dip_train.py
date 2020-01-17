@@ -38,15 +38,17 @@ def load_and_mask_image(img_path, mask):
 
 
 def l2_loss(out_img, masked_image, inv_mask):
+    # Will this diff broadcast correctly?
     diff = out_img - masked_image
-    diff = diff * inv_mask
+    # Shouldn't this be mask, not inv_mask?
+    #diff = diff * inv_mask
     return tf.reduce_sum(tf.pow(diff, 2))
 
 
 def print_img(normalized_img, step):
     #normalized_img = normalized_img.astype(np.uint16)
     #path = f'./dip_debug_out/step_{step}.tiff'
-    path = f'./dip_debug_out/step_{step}.png'
+    path = f'./out/step_{step}.png'
     cv2.imwrite(path, normalized_img)
     #img = Image.fromarray(normalized_img[0], 'BGR')
     #img.save(path)
@@ -54,7 +56,7 @@ def print_img(normalized_img, step):
 
 
 def dbg_img(img):
-    cv2.imwrite('./dip_debug_out/out.png', img)
+    cv2.imwrite('./out/debug_out.png', img)
 
 
 def fill(mask_path, img_path):
