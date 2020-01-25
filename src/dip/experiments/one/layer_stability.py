@@ -134,7 +134,8 @@ def sgd_optimizer():
 
 
 def adam_optimizer():
-    learning_rate = 0.00375
+    #learning_rate = 0.00375, good but unstable.
+    learning_rate = 0.003
     optimizer = tf.train.AdamOptimizer(
             learning_rate=learning_rate, epsilon=0.01)
     return optimizer, learning_rate
