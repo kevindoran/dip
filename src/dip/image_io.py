@@ -42,13 +42,25 @@ def load_and_mask_img(img_path, mask):
 
 
 def print_img(normalized_img, out_file_path):
+    """Denormalize and print an image to file.
+
+    The input image data will:
+        * be clipped to [-1, 1]
+        * transformed to [0, 2]
+        * scaled to [0, 256]
+    Args:
+        normalized_img (numpy.array): numpy array with shape (X, X, 3).
+    """
+    img = np.clip(normalized_img, -1, 1)
+    img = (img + 1.0) * 127.5
     parent_dir = pathlib.Path(out_file_path).parent
     parent_dir.mkdir(parents=True, exist_ok=True)
-    cv2.imwrite(out_file_path, normalized_img)
+    cv2.imwrite(out_file_path, img)
 
 
 def dbg_img(img):
     cv2.imwrite('./debug_out.png', img)
+
 
 def apply_gaussian_noise(img):
     if np.any((img < 1.0)|(img > 1.0)):

@@ -6,3 +6,9 @@ venv
 *.swp
 *.pyc
 *egg-info
+out
+notebooks/.ipynb_checkpoints
+*.swp
+*.swo
+*.swn
+
