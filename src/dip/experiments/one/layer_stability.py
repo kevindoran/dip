@@ -1,13 +1,11 @@
 import re
 import enum
-import pprint
 from collections import defaultdict
 from collections import namedtuple
 
 import numpy as np
 import tensorflow as tf
 import pandas 
-import csv
 from typing import List
 
 import dip.image_io
@@ -17,8 +15,6 @@ IMG_SHAPE = (256, 256, 3)
 BATCH_SIZE = 16
 NET_NAME = 'inpaint_net'
 DBG_FOLDER_PATH = 'out/experiments/1/1/dbg'
-
-pretty_printer = pprint.PrettyPrinter()
 
 
 def stage1_layer_names():
