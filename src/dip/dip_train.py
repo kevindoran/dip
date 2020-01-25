@@ -41,7 +41,7 @@ def l2_loss(out_img, masked_image, inv_mask):
     # Will this diff broadcast correctly?
     diff = out_img - masked_image
     # Shouldn't this be mask, not inv_mask?
-    #diff = diff * inv_mask
+    diff = diff * inv_mask
     return tf.reduce_sum(tf.pow(diff, 2))
 
 
@@ -83,9 +83,9 @@ def fill(mask_path, img_path):
     loss += weight_sum
     learning_rate_start = 05.0; decay_steps = 20; decay_rate = 0.98
     learning_rate = tf.train.exponential_decay(learning_rate_start, global_step, decay_steps, decay_rate)
-    #learning_rate = 300.0
-    #optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, epsilon=0.01)
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
+    learning_rate = 3.0
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, epsilon=0.01)
+    #optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
     grads =optimizer.compute_gradients(loss)
     flattened_grads = tf.concat([tf.reshape(g, [-1]) for g,v in grads],0)
     update_dist = tf.norm(flattened_grads * learning_rate)
