@@ -1,7 +1,6 @@
 import re
 import enum
 from collections import defaultdict
-from collections import namedtuple
 
 import numpy as np
 import tensorflow as tf
