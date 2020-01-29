@@ -13,7 +13,7 @@ import dip.deep_fill.inpaint_model as deep_fill_model
 IMG_SHAPE = (256, 256, 3)
 BATCH_SIZE = 16
 NET_NAME = 'inpaint_net'
-DBG_FOLDER_PATH = 'out/experiments/1/1/dbg'
+DBG_FOLDER_PATH = 'out/experiments/1/4/dbg'
 
 
 def stage1_layer_names():
@@ -37,6 +37,31 @@ def stage2_layer_names():
 def both_stage_layer_names():
     return stage1_layer_names() + stage2_layer_names()
 
+
+class MyDebugAdam(tf.train.AdamOptimizer):
+
+    #def __init__(self, *args, **kwargs):
+    #    super(MyDebugAdam, self).__init__(*args, **kwargs)
+
+    def get_mul_factor(self, var):
+            m = self.get_slot(var, "m")
+            v = self.get_slot(var, "v")
+            beta1_power, beta2_power = self._get_beta_accumulators()
+            m_hat = m/(1-beta1_power)
+            v_hat = v/(1-beta2_power)
+            step = m_hat/(v_hat**0.5 + self._epsilon_t)
+            lr = self._lr
+            mul_factor = lr*step
+            return mul_factor
+        
+    def _apply_dense(self, grad, var):
+        log_for = {'conv17'}
+        if layer_name_from_var(var) in log_for:
+            # Use a histogram summary to monitor it during training.
+            tf.summary.histogram("hist_adam_step", self.get_mul_factor(var)) 
+            tf.summary.histogram("hist_grad", grad) 
+            tf.summary.histogram("hist_var", var) 
+        return super(MyDebugAdam,self)._apply_dense(grad, var)    
 
 class TrainingData:
 
@@ -96,10 +121,10 @@ def gradients_by_layer(grad_var_pairs):
 def summarize_gradients_by_layer(grad_var_pairs):
     layer_to_grad = {}
     for layer_name, grads in gradients_by_layer(grad_var_pairs).items():
-        layer_dist = tf.add_n([tf.nn.l2_loss(v) for v in grads])
+        layer_flattened = tf.concat([tf.reshape(g, [-1]) for g in grads], 
+                axis=0)
         # Normalize by no. of params.
-        param_count = tf.add_n([tf.size(v, out_type=tf.float32) for v in grads])
-        layer_dist /= param_count
+        layer_dist = tf.norm(layer_flattened, ord='euclidean')
         layer_to_grad[layer_name] = layer_dist
     return layer_to_grad
     
@@ -130,8 +155,10 @@ def sgd_optimizer():
 
 def adam_optimizer():
     #learning_rate = 0.00375, good but unstable.
-    learning_rate = 0.003
-    optimizer = tf.train.AdamOptimizer(
+    learning_rate = 0.0005
+    #optimizer = tf.train.AdamOptimizer(
+    #        learning_rate=learning_rate, epsilon=0.01)
+    optimizer = MyDebugAdam(
             learning_rate=learning_rate, epsilon=0.01)
     return optimizer, learning_rate
 
@@ -160,7 +187,9 @@ def run(target_img_path, original_img_path):
     target_img_batch = tf.expand_dims(
             tf.convert_to_tensor(target_img, dtype=tf.float32),
             axis=0)
-    noise = tf.random.uniform((1, *IMG_SHAPE), dtype=tf.dtypes.float32)
+    noise = tf.random.uniform((1, *IMG_SHAPE), 
+            seed=127,
+            dtype=tf.dtypes.float32)
     input_img = noise # Alternatively, an incomplete image for inpainting.
     input_img_batch = tf.tile(input_img, (BATCH_SIZE, 1, 1, 1))
     # If shape of input_img_batch is = (16, 256, 256, 3), then the mask will
@@ -176,7 +205,10 @@ def run(target_img_path, original_img_path):
     minimize_op = optimizer.apply_gradients(grads)
     if stage == OutputStage.STAGE_1:
         grads = stage_1_grads_only(grads)
-    layer_data = list(summarize_gradients_by_layer(grads).values())
+    # Replace gradients with step:   
+    step_var_pairs = [(optimizer.get_mul_factor(v),v) for g,v in grads]
+    #layer_data = list(summarize_gradients_by_layer(grads).values())
+    layer_data = list(summarize_gradients_by_layer(step_var_pairs).values())
     # Should we clip or not? If clipping, then we have some limits on our loss,
     # (-1 - 1)^2 No, don't clip the loss, but you can clip the image before
     # saving.
@@ -197,7 +229,8 @@ def run(target_img_path, original_img_path):
                             steps_per_record=steps_per_record,
                             training_method=optimizer.__class__.__name__,
                             learning_rate=learning_rate)
-
+        all_summaries = tf.summary.merge_all()
+        file_writer = tf.summary.FileWriter(DBG_FOLDER_PATH + '/tf_summary')
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
             step = 0
@@ -211,16 +244,20 @@ def run(target_img_path, original_img_path):
             dip.image_io.print_img(target_img_val, 
                     f'{DBG_FOLDER_PATH}/dbg_target_image.png')
             while True:
-                _, loss_val, layer_data_val, psnr_val = \
-                    sess.run([minimize_op, loss, layer_data, psnr])
+                _, loss_val, layer_data_val, psnr_val, grads_val, summary_val \
+                    = sess.run([minimize_op, loss, layer_data, psnr, grads,
+                        all_summaries])
                 print(f'Step: {step}.\t'
                       f'Loss: {loss_val}.\t'
                       f'PSNR: {psnr_val}.\t')
+                assert np.all(np.array(layer_data_val) >= 0), 'All norm \
+                    measures should be zero or more.'
                 # Record data.
                 should_record = not step % steps_per_record
                 if should_record:
                     single_record = [loss_val, psnr_val] + layer_data_val
                     data.add(single_record)
+                    file_writer.add_summary(summary_val, step)
                 # Print the output image every so often.
                 save_img = step < 20 or (not step % steps_per_img_save)
                 if save_img:
