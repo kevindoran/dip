@@ -13,7 +13,7 @@ import dip.deep_fill.inpaint_model as deep_fill_model
 IMG_SHAPE = (256, 256, 3)
 BATCH_SIZE = 16
 NET_NAME = 'inpaint_net'
-DBG_FOLDER_PATH = 'out/experiments/1/4/dbg'
+DBG_FOLDER_PATH = 'out/experiments/1/5/dbg'
 
 
 def stage1_layer_names():
@@ -58,8 +58,8 @@ class MyDebugAdam(tf.train.AdamOptimizer):
         log_for = {'conv17'}
         if layer_name_from_var(var) in log_for:
             # Use a histogram summary to monitor it during training.
-            tf.summary.histogram("hist_adam_step", self.get_mul_factor(var)) 
-            tf.summary.histogram("hist_grad", grad) 
+            #tf.summary.histogram("hist_adam_step", self.get_mul_factor(var)) 
+            #tf.summary.histogram("hist_grad", grad) 
             tf.summary.histogram("hist_var", var) 
         return super(MyDebugAdam,self)._apply_dense(grad, var)    
 
@@ -153,14 +153,25 @@ def sgd_optimizer():
     return optimizer, lr
 
 
+def learning_rate():
+    lr_start = 0.05
+    decay_steps = 20
+    decay_rate = 0.98
+    global_step = tf.train.get_or_create_global_step()#tf.train.get_global_step()
+    lr = tf.train.exponential_decay(lr_start, global_step, decay_steps, 
+            decay_rate)
+    return lr
+
+
 def adam_optimizer():
     #learning_rate = 0.00375, good but unstable.
-    learning_rate = 0.0005
+    #learning_rate = 0.0005
+    lr = learning_rate()
     #optimizer = tf.train.AdamOptimizer(
     #        learning_rate=learning_rate, epsilon=0.01)
     optimizer = MyDebugAdam(
-            learning_rate=learning_rate, epsilon=0.01)
-    return optimizer, learning_rate
+            learning_rate=lr, epsilon=0.01)
+    return optimizer, lr
 
 
 def create_optimizer():
