@@ -34,6 +34,13 @@ def load_img(img_path):
     return img
 
 
+def load_img_greyscale(img_path):
+    img = cv2.imread(img_path, flags=cv2.IMREAD_GRAYSCALE)
+    img = np.expand_dims(img, -1)
+    img = img / 127.5 - 1.
+    return img
+
+
 def load_and_mask_img(img_path, mask):
     img = load_img(img_path)
     # Delete masked area.
