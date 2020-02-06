@@ -36,6 +36,7 @@ def load_img(img_path):
 
 def load_img_greyscale(img_path):
     img = cv2.imread(img_path, flags=cv2.IMREAD_GRAYSCALE)
+    # Add color channel (which will only have length 1).
     img = np.expand_dims(img, -1)
     img = img / 127.5 - 1.
     return img

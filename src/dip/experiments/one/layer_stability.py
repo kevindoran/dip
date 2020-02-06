@@ -43,7 +43,7 @@ class MyDebugAdam(tf.train.AdamOptimizer):
     #def __init__(self, *args, **kwargs):
     #    super(MyDebugAdam, self).__init__(*args, **kwargs)
 
-    def get_mul_factor(self, var):
+    def mul_factor(self, var):
             m = self.get_slot(var, "m")
             v = self.get_slot(var, "v")
             beta1_power, beta2_power = self._get_beta_accumulators()
@@ -51,14 +51,14 @@ class MyDebugAdam(tf.train.AdamOptimizer):
             v_hat = v/(1-beta2_power)
             step = m_hat/(v_hat**0.5 + self._epsilon_t)
             lr = self._lr
-            mul_factor = lr*step
-            return mul_factor
-        
+            factor  = lr*step
+            return factor 
+
     def _apply_dense(self, grad, var):
         log_for = {'conv17'}
         if layer_name_from_var(var) in log_for:
             # Use a histogram summary to monitor it during training.
-            #tf.summary.histogram("hist_adam_step", self.get_mul_factor(var)) 
+            #tf.summary.histogram("hist_adam_step", self.mul_factor(var)) 
             #tf.summary.histogram("hist_grad", grad) 
             tf.summary.histogram("hist_var", var) 
         return super(MyDebugAdam,self)._apply_dense(grad, var)    
@@ -154,7 +154,7 @@ def sgd_optimizer():
 
 
 def learning_rate():
-    lr_start = 0.05
+    lr_start = 0.0005
     decay_steps = 20
     decay_rate = 0.98
     global_step = tf.train.get_or_create_global_step()#tf.train.get_global_step()
@@ -217,7 +217,7 @@ def run(target_img_path, original_img_path):
     if stage == OutputStage.STAGE_1:
         grads = stage_1_grads_only(grads)
     # Replace gradients with step:   
-    step_var_pairs = [(optimizer.get_mul_factor(v),v) for g,v in grads]
+    step_var_pairs = [(optimizer.mul_factor(v)*g,v) for g,v in grads]
     #layer_data = list(summarize_gradients_by_layer(grads).values())
     layer_data = list(summarize_gradients_by_layer(step_var_pairs).values())
     # Should we clip or not? If clipping, then we have some limits on our loss,
