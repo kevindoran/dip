@@ -2,4 +2,5 @@ venv
 .pytest_cache
 .idea
 logs/
+logs_bkup/
 *__pycache__
