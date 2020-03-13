@@ -18,19 +18,12 @@ class InstrumentationData:
     class Layer:
         """Specifies which layer information to record. Also stores this data.
         """
-        def __init__(self, layer_in, kernel, bias, in_range=None,
-                kernel_range=None, bias_range=None):
+        def __init__(self, layer_in, kernel, bias):
             """
             Args:
                 layer_in (tf.Tensor): the input tensor to a network layer.
                 kernel (tf.Variable): a convolution kernel variable.
                 bias (tf.Variable): a convolution bias variable.
-                in_range (Tuple(int,int)): min and max values for elements of
-                    the layer_in. Used for setting color ranges when plotting.
-                kernel_range (Tuple(int,int)): min and max values for elements
-                    of the kernel. Used for setting color ranges when plotting.
-                bias_range (Tuple(int,int)): min and max values for elements
-                    of the bias. Used for setting color ranges when plotting.
             """
             # Warn that only the first batch element will be used.
             if layer_in is not None:
@@ -42,19 +35,18 @@ class InstrumentationData:
             self.layer_in = layer_in
             self.kernel = kernel
             self.bias = bias
-            self.vars = [layer_in, kernel, bias]
-            self.non_none_vars = list(filter(lambda x : x is not None,
-                    self.vars))
             # The network evaluated values:
             self.layer_in_data = []
             self.kernel_data = []
             self.bias_data = []
-            self.in_range = in_range
-            self.kernel_range = kernel_range
-            self.bias_range = bias_range
+
+        def non_none_vars(self):
+            for x in (self.layer_in, self.kernel, self.bias):
+                if x is not None:
+                    yield x
 
         def eval_count(self):
-            return len(self.non_none_vars)
+            return len(list(self.non_none_vars()))
 
         def add_values(self, eval_results):
             if len(eval_results) != self.eval_count():
@@ -109,7 +101,7 @@ class InstrumentationData:
     def eval_list(self):
         res = []
         for l in self.layers:
-            res.extend(l.non_none_vars)
+            res.extend(l.non_none_vars())
         return res
 
     def eval_and_record(self, sess, step):
@@ -285,7 +277,8 @@ def num_kernels(dataset, layer : int):
     return ans
 
 
-def min_max_values(dataset):
+def min_max_values(dataset, min_quantile=0.05, max_quantile=0.95, 
+        single_layer_val=True, single_kernel_val=True):
     layer_min_max = {}
     _num_layers = num_layers(dataset)
     # Input image is assumed to be in range (-1, 1)
@@ -295,27 +288,34 @@ def min_max_values(dataset):
     # range of the input image. So, use the same limits as the input.
     layer_min_max[layer_in_key(_num_layers-1)] = (-1.0, 1.0)
     # All other channels are given a shared (min,max)
-    ds_min = dataset.min()
-    ds_max = dataset.max()
+    ds_min = dataset.quantile(min_quantile)
+    ds_max = dataset.quantile(max_quantile)
     other_layers = layer_in_keys(dataset, exclude=[0, _num_layers-1])
     l_min = min([ds_min[l] for l in other_layers])
     l_max = max([ds_max[l] for l in other_layers])
     for l in other_layers:
-        layer_min_max[l] = (l_min, l_max)
-
+        if single_layer_val:
+            abs_max = max(abs(l_min), abs(l_max))
+        else:
+            abs_max = max(abs(ds_min[l]), abs(ds_max[l]))
+        layer_min_max[l] = (-abs_max, abs_max)
     # Treat kernels like the inner layers: all share common min-max.
     kernel_min_max = {}
     _kernel_keys = kernel_keys(dataset)
     k_min = min([ds_min[k] for k in _kernel_keys])
     k_max = max([ds_max[k] for k in _kernel_keys])
     for k in _kernel_keys:
-        kernel_min_max[k] = (k_min, k_max)
+        if single_kernel_val:
+            abs_max = max(abs(k_min), abs(k_max))
+        else:
+            abs_max = max(abs(ds_min[k]), abs(ds_min[k]))
+        kernel_min_max[k] = (-abs_max, abs_max)
     return layer_min_max, kernel_min_max
 
 
 def density_plot(data_dict, bins=20, overlap=3.0, figsize=(6,6)):
-    vmax = max(max(arr) for arr in data_dict.values()) 
-    vmin = min(min(arr) for arr in data_dict.values())
+    vmax = max(max(arr) for arr in data_dict.values()) * 1.1
+    vmin = min(min(arr) for arr in data_dict.values()) * 1.1
     fig, axes = joypy.joyplot(
 	data_dict, 
 	figsize=figsize,
@@ -382,21 +382,23 @@ def print_network_step(dataset, step, network_name=None, fig=None):
     step_data = dataset.sel(step=step)
     # calculate num_layers. A little hacky...
     _num_layers = num_layers(dataset)
-    layer_min_max, kernel_min_max = min_max_values(dataset)
+    #layer_min_max, kernel_min_max = min_max_values(dataset)
+    layer_min_max, kernel_min_max = min_max_values(dataset, 
+            single_layer_val=True, single_kernel_val=True)
+            # Have separate color ranges for each kernel and layer?
+            #single_layer_val=False, single_kernel_val=False)
 
     if not fig:
-        fig = plt.figure(figsize=(24, 12))
+        fig = plt.figure(figsize=(24*4, 12*4))
     fig.suptitle(f'{network_name} (step {step})')
     '''
-    +----+----+ ... +----+
-    | l1 | l2 |  ln ||   |   (last column is for desitiy estimates).
-    +----+----+-----+----+  
-    |    |    |     ||   |   (bottom row is for velocity estimates).
-    +----+----+-----+----+
+    +----+----+ ... +
+    | l1 | l2 |  ln |
+    +----+----+-...-+
     l1 is input image.
     ln is output image.
     '''
-    gs = gridspec.GridSpec(nrows=2, ncols=_num_layers+1, figure=fig)
+    gs = gridspec.GridSpec(nrows=1, ncols=_num_layers, figure=fig)
     for l in range(_num_layers):
         _num_channels = num_channels(dataset, l)
         '''
@@ -423,17 +425,24 @@ def print_network_step(dataset, step, network_name=None, fig=None):
                        +----+  |  +----+
                        .    .  |  .    .
         '''
+        lmin, lmax = layer_min_max[layer_in_key(l)]
         layer_in_data = step_data[layer_in_key(l)]
+        layer_norm_range = matplotlib.colors.Normalize(vmin=lmin, vmax=lmax,
+                clip=True)
+        _num_kernels = num_kernels(dataset, l)
+        if _num_kernels:
+            kmin, kmax = kernel_min_max[kernel_key(l)]
+            kernel_norm_range = matplotlib.colors.Normalize(vmin=kmin, 
+                    vmax=kmax, clip=True)
         for c in range(_num_channels):
             in_ax = fig.add_subplot(gs_channel[c, 0], 
-                    xticks=[], yticks=[], xticklabels=[], yticklabels=[]) 
+                    xticks=[], yticks=[], xticklabels=[], yticklabels=[],
+                    frame_on=False, autoscale_on=False) 
+            in_ax.set_axis_off()
             c_slice = dict(((channel_dim(l), c),))
             channel_data = layer_in_data.loc[c_slice]
-            lmin, lmax = layer_min_max[layer_in_key(l)]
-            norm_range = matplotlib.colors.Normalize(vmin=lmin, vmax=lmax,
-                    clip=True)
             in_ax.imshow(channel_data, interpolation='nearest', cmap='gray',
-                    norm=norm_range)
+                    norm=layer_norm_range)
 
             '''
               kernels             k1   k2         kn
@@ -441,30 +450,30 @@ def print_network_step(dataset, step, network_name=None, fig=None):
               | c? |       | c? |    |    |     |    |
               +----+  ->   +----+----+----+     +----+
             '''
-            _num_kernels = num_kernels(dataset, l)
             if not _num_kernels:
                 continue
             gs_kernel = gs_channel[c, 1].subgridspec(nrows=1, ncols=_num_kernels)
             all_kernel_data = step_data[kernel_key(l)]
             for k in range(_num_kernels):
                 kernel_ax = fig.add_subplot(gs_kernel[k],
-                    xticks=[], yticks=[], xticklabels=[], yticklabels=[]) 
+                    xticks=[], yticks=[], xticklabels=[], yticklabels=[],
+                    frame_on=False, autoscale_on=False) 
+                kernel_ax.set_axis_off()
                 k_slice = dict(((kernel_dim(l), k),))
                 c_slice = dict(((channel_dim(l), c),))
                 kernel_data_by_channel = all_kernel_data.loc[k_slice].loc[c_slice]
                 is_last = l == _num_layers - 2
-                kmin, kmax = kernel_min_max[kernel_key(l)]
-                norm_range = matplotlib.colors.Normalize(vmin=kmin, vmax=kmax,
-                        clip=True)
                 kernel_ax.imshow(kernel_data_by_channel, 
-                        interpolation='nearest', norm=norm_range, cmap='PiYG')
+                        interpolation='nearest', 
+                        norm=kernel_norm_range, cmap='PiYG')
     return fig
 
 
 def save_network_step(dataset, step, out_file_dir, fig=None):
     out_path = f'{out_file_dir}/{step}.png'
     fig = print_network_step(dataset, step, fig=fig)
-    plt.savefig(out_path)
+    plt.savefig(out_path, #bbox_inches='tight', dpi=20, pad_inches=1.0,
+            facecolor=(0,0,0))
     plt.close(fig)
     return out_path
 
@@ -491,13 +500,14 @@ def print_network(dataset, out_file_dir, max_steps=None):
     if max_steps_in:
         max_steps = min(max_steps, max_steps_in)
 
-    with tempfile.TemporaryDirectory() as tempdir:
-        density_path = f'{tempdir}/density.png'
-        network_density_plot(dataset, density_path)
-        import multiprocessing
-        import functools
-        with multiprocessing.Pool() as pool:
-            pool.map(functools.partial(save_network_step, dataset, 
-                                       out_file_dir=out_file_dir),
-                     range(0, max_steps))
-        plt.close()
+    density_path = f'{out_file_dir}/density.png'
+    #network_density_plot(dataset, density_path)
+    import multiprocessing
+    import functools
+    #for i in range(max_steps):
+        #save_network_step(dataset, i, out_file_dir=out_file_dir)
+    with multiprocessing.Pool() as pool:
+        pool.map(functools.partial(save_network_step, dataset, 
+                                   out_file_dir=out_file_dir),
+                 range(0, max_steps))
+    plt.close()
